@@ -39,6 +39,20 @@ java -version
 
 step "2. 预下载 Android SDK（腾讯镜像）"
 dl() { curl -fSL --retry 3 --retry-delay 5 --connect-timeout 20 -o "$2" "$1"; }
+# 镜像文件名会变（如 platform-34 已改 ext 命名），依次尝试候选 URL
+dl_any() {
+  local out="$1"; shift
+  local u
+  for u in "$@"; do
+    echo "尝试下载: $u"
+    if curl -fSL --retry 2 --retry-delay 3 --connect-timeout 20 -o "$out" "$u"; then
+      return 0
+    fi
+    echo "  -> 不可用，换下一个候选"
+  done
+  echo "错误：所有候选 URL 均下载失败" >&2
+  return 1
+}
 $SUDO mkdir -p "$SDK/cmdline-tools" "$SDK/platforms" "$SDK/build-tools"
 
 dl "$MIRROR/commandlinetools-linux-11076708_latest.zip" /tmp/cmdtools.zip
@@ -48,18 +62,28 @@ $SUDO unzip -q /tmp/cmdtools.zip -d "$SDK/cmdline-tools"
 dl "$MIRROR/platform-tools_r34.0.5-linux.zip" /tmp/pt.zip
 $SUDO unzip -q -o /tmp/pt.zip -d "$SDK"
 
-dl "$MIRROR/platform-34_r03.zip" /tmp/p34.zip
+dl_any /tmp/p34.zip \
+  "$MIRROR/platform-34-ext12_r01.zip" \
+  "$MIRROR/platform-34-ext11_r01.zip" \
+  "$MIRROR/platform-34-ext10_r01.zip" \
+  "$MIRROR/platform-34-ext8_r01.zip" \
+  "$MIRROR/platform-34-ext7_r03.zip" \
+  "$MIRROR/platform-34_r03.zip"
 rm -rf /tmp/p34 && mkdir -p /tmp/p34 && unzip -q /tmp/p34.zip -d /tmp/p34
 $SUDO rm -rf "$SDK/platforms/android-34"
 $SUDO mv /tmp/p34/* "$SDK/platforms/android-34"
 
-dl "$MIRROR/build-tools_r34-linux.zip" /tmp/bt.zip
+dl_any /tmp/bt.zip \
+  "$MIRROR/build-tools_r34-linux.zip" \
+  "$MIRROR/build-tools_r34.0.0-linux.zip"
 rm -rf /tmp/bt && mkdir -p /tmp/bt && unzip -q /tmp/bt.zip -d /tmp/bt
 $SUDO rm -rf "$SDK/build-tools/34.0.0"
 $SUDO mv /tmp/bt/* "$SDK/build-tools/34.0.0"
 
 step "3. 预下载 Android NDK r25b（腾讯镜像）"
-dl "$MIRROR/android-ndk-r25b-linux.zip" /tmp/ndk.zip
+dl_any /tmp/ndk.zip \
+  "$MIRROR/android-ndk-r25b-linux.zip" \
+  "$MIRROR/android-ndk-r25b-linux-x86_64.zip"
 rm -rf /tmp/ndk && mkdir -p /tmp/ndk && unzip -q /tmp/ndk.zip -d /tmp/ndk
 $SUDO rm -rf "$NDK"
 $SUDO mv /tmp/ndk/* "$NDK"
