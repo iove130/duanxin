@@ -1,0 +1,14 @@
+.buildozer/
+bin/
+dist/
+__pycache__/
+.preview_data/
+.preview_kivy_home/
+*.pyc
+*.APK
+sms_forwarder_config.json
+sms_forwarder_log.jsonl
+sms_forwarder.heartbeat
+sms_forwarder.stop
+.idea/
+.vscode/

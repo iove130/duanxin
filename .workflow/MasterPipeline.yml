@@ -1,0 +1,29 @@
+# Gitee Go 流水线：push 到 main 时自动打包 APK
+# 说明：本文件由仓库维护。若推送后「流水线」页面未自动出现该流水线，
+# 请在 Gitee 仓库页 → 流水线 → 新建流水线 → 空模板，把本文件内容原样粘贴保存。
+version: '1.0'
+name: build-apk
+displayName: 打包 APK（buildozer）
+triggers:
+  push:
+    branches:
+      precise:
+        - main
+stages:
+  - stage: build
+    name: build
+    displayName: 构建
+    strategy: naturally
+    trigger: auto
+    steps:
+      - step: build@python
+        name: buildozer_apk
+        displayName: buildozer 打包 APK
+        pythonVersion: '3.11'
+        # 构建产物：bin/ 目录下的 APK，可在「发布记录」中下载
+        artifacts:
+          - name: BUILD_ARTIFACT
+            path:
+              - ./bin/
+        commands:
+          - bash ci/gitee_go_build.sh

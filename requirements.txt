@@ -1,0 +1,3 @@
+# 开发机跑桌面预览用；安卓打包的依赖写在 buildozer.spec 的 requirements 里
+kivy==2.3.0
+Kivy-Garden==0.1.5
