@@ -9,7 +9,8 @@ package org.example.smsforwarder.core
  * 1. **触发词**——正文出现「验证码 / 校验码 / 动态码…」等才认为是验证码短信，
  *    避免把普通通知短信里的数字误当成验证码。
  * 2. **提取**——优先取「触发词后紧跟的数字」；取不到则退回「正文中最长的 4~8 位数字段」。
- * 3. **排除干扰**——手机号、金额、时间、订单号、连号（111111）一律不算验证码。
+ * 3. **排除干扰**——手机号、金额、时间一律不算验证码。
+ *    （注意：全同数字如 8888 / 0000 在某些服务里确实是验证码，不能一刀切排除。）
  */
 object CodeExtractor {
 
@@ -28,7 +29,10 @@ object CodeExtractor {
     private val TIME_UNITS = listOf("年", "月", "日", "号", "时", "分", "秒", "点")
 
     /** 数字段紧跟这些单位时是金额，不是验证码。 */
-    private val MONEY_UNITS = listOf("元", "￥", "¥", "块钱", "人民币")
+    private val MONEY_UNITS = listOf("元", "块钱", "人民币")
+
+    /** 数字段前面是这些符号时是金额，不是验证码。 */
+    private val MONEY_PREFIX = listOf("¥", "￥", "$", "RMB")
 
     /** 提取验证码。返回 [是否成功, 验证码或空串]。 */
     fun extract(body: String?): Pair<Boolean, String> {
@@ -80,10 +84,16 @@ object CodeExtractor {
         if (num.length == 11 && num.startsWith("1")) return true
 
         val idx = text.indexOf(num)
-        if (idx <= 0) return false
-        val before = text.substring(0, idx).takeLast(6)
-        if (TIME_UNITS.any { before.endsWith(it) }) return true
-        if (MONEY_UNITS.any { before.endsWith(it) }) return true
+        if (idx < 0) return false
+
+        // 中文里单位是跟在数字「后面」的：2026 年 / 5000 元 / 10 分钟
+        val after = text.substring(idx + num.length).trimStart()
+        if (TIME_UNITS.any { after.startsWith(it) }) return true
+        if (MONEY_UNITS.any { after.startsWith(it) }) return true
+
+        // 货币符号是写在数字「前面」的：¥5000 / ￥8888
+        val before = text.substring(0, idx).trimEnd()
+        if (MONEY_PREFIX.any { before.endsWith(it) }) return true
         return false
     }
 }
