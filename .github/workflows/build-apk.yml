@@ -8,7 +8,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # 必须用 22.04：24.04 的 autoconf 2.72 与 p4a libffi recipe 不兼容
+    # （报 error: possibly undefined macro: LT_SYS_SYMBOL_USCORE）
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +22,7 @@ jobs:
             git zip unzip curl ca-certificates \
             openjdk-17-jdk-headless \
             autoconf automake libtool pkg-config cmake ccache patch \
-            zlib1g-dev libncurses-dev libffi-dev libssl-dev
+            zlib1g-dev libncurses-dev libffi-dev libssl-dev libtinfo5
 
       - name: Set up Python
         uses: actions/setup-python@v5
