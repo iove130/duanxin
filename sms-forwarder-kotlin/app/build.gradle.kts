@@ -51,6 +51,10 @@ android {
 }
 
 dependencies {
+    // Compose BOM：统一管理所有 Compose 库版本，下面的库不再单独指定版本
+    val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
+    implementation(composeBom)
+
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-compose:1.9.3")
