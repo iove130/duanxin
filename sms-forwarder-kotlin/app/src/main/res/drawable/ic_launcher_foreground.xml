@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 转发箭头 + 短信气泡的简约图形，深青绿主色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 短信气泡 -->
+    <path
+        android:fillColor="#0F6E56"
+        android:pathData="M30,34 h48 a8,8 0 0 1 8,8 v22 a8,8 0 0 1 -8,8 h-26 l-14,12 v-12 h-8 a8,8 0 0 1 -8,-8 v-22 a8,8 0 0 1 8,-8 z" />
+    <!-- 转发箭头 -->
+    <path
+        android:fillColor="#7FE3C0"
+        android:pathData="M44,50 h20 a4,4 0 0 1 0,8 h-20 v6 l-10,-9 l10,-9 z" />
+    <path
+        android:fillColor="#7FE3C0"
+        android:pathData="M44,58 h14 l8,-7 v14 l-8,-7 h-14 z" />
+</vector>

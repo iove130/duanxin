@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">短信转发器</string>
+    <string name="service_channel_name">转发服务</string>
+    <string name="service_channel_desc">保持短信转发服务常驻运行</string>
+    <string name="service_notification_title">短信转发服务运行中</string>
+    <string name="service_notification_text">正在监听短信并按规则转发</string>
+</resources>
