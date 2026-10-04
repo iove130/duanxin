@@ -103,6 +103,9 @@ object Rules {
                 }
                 false to ""
             }
+
+            // AUTO 已在方法开头单独处理，这里兜底保证 when 穷尽
+            KeywordMode.AUTO -> false to ""
         }
     }
 

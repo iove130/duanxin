@@ -145,6 +145,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** MIUI 验证码短信需要额外授权，返回引导文案；非 MIUI 返回空串。 */
+    fun miuiHint(): String = if (SmsHelper.isMiui()) SmsHelper.miuiCodeSmsHint() else ""
+
+    fun openPermissionManager(): Boolean {
+        SmsHelper.openPermissionManager(getApplication())
+        return true
+    }
+
     // ------------------------------------------------------------ 便捷更新
     fun setReceivers(text: String) = update { it.copy(receivers = Rules.parseList(text)) }
     fun setSenders(text: String) = update { it.copy(senders = Rules.parseList(text)) }

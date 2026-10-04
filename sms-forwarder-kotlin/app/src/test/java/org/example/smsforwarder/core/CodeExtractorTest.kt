@@ -53,8 +53,16 @@ class CodeExtractorTest {
     }
 
     @Test
-    fun rejectRepeatedDigits() {
-        assertFalse(code("您的验证码是111111").first)
+    fun acceptRepeatedDigits() {
+        // 8888 / 6666 在部分服务里确实是验证码，不能一刀切排除
+        assertEquals("8888", code("您的动态码为 8888").second)
+        assertEquals("1111", code("验证码：1111").second)
+    }
+
+    @Test
+    fun rejectAbnormalLength() {
+        // 长度明显异常的号码段不应作为验证码
+        assertFalse(code("您的验证码是123456789012").first)
     }
 
     // ---------------------------------------------------------- 真实场景

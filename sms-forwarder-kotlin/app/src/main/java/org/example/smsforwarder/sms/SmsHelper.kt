@@ -156,6 +156,63 @@ object SmsHelper {
         Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * 是否是 MIUI / HyperOS 系��。
+     * 这些系统对「验证码 / 通知类短信」有独立的安全保护：
+     * 普通短信广播能收到，验证码短信收不到，必须由用户在
+     * 「安全中心 → 授权管理 → 本应用 → 权限」里手动勾选「通知类短信」。
+     * 这是系统级授权，应用代码无法自行开启，只能检测并引导。
+     */
+    fun isMiui(): Boolean {
+        val rom = runCatching {
+            @Suppress("DEPRECATION")
+            android.os.Build.MANUFACTURER
+        }.getOrNull().orEmpty()
+        if (!rom.equals("Xiaomi", ignoreCase = true)) return false
+        val prop = runCatching {
+            @Suppress("DEPRECATION")
+            Class.forName("android.os.MiuiOs").getMethod("getBuildType")?.invoke(null)?.toString()
+        }.getOrNull().orEmpty()
+        return prop.isNotEmpty() || runCatching {
+            @Suppress("DEPRECATION")
+            Class.forName("miui.os.Build").getName()
+        }.isSuccess
+    }
+
+    /** 验证码短信在 MIUI 上需要额外授权，这里给出明确引导文案。 */
+    fun miuiCodeSmsHint(): String =
+        "检测到小米/MIUI 系统：验证码属于「通知类短信」，需手动开启才能接收。\n" +
+            "路径：安全中心 → 授权管理 → 短信转发器 → 权限 → 勾选「通知类短信」\n" +
+            "（未开启时普通短信能收到，验证码短信会被系统拦截）"
+
+    /** 尝试跳到 MIUI 授权管理页；失败则退回应用详情页。 */
+    fun openPermissionManager(context: Context) {
+        val pkg = context.packageName
+        val candidates = listOf(
+            "miui.intent.action.APP_PERM_EDITOR",
+            "miui.intent.action.APP_PERM_EDITOR_EXTRA",
+        )
+        var opened = false
+        for (action in candidates) {
+            val ok = runCatching {
+                val intent = Intent(action).apply {
+                    setClassName(
+                        "com.miui.securitycenter",
+                        "com.miui.permcenter.permissions.PermissionsEditorActivity",
+                    )
+                    putExtra("extra_pkgname", pkg)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }.isSuccess
+            if (ok) {
+                opened = true
+                break
+            }
+        }
+        if (!opened) openAppSettings(context)
+    }
+
     /** 跳转本应用系统详情页，方便手动开权限 / 关闭电池优化。 */
     fun openAppSettings(context: Context) {
         runCatching {

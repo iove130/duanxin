@@ -149,6 +149,36 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                     text = "电池优化白名单",
                     color = Card2Dark,
                 ) { vm.openBatterySettings() }
+
+                // MIUI 专属：验证码属于「通知类短信」，需系统级授权才能收到
+                val miuiHint = vm.miuiHint()
+                if (miuiHint.isNotEmpty()) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF3A2A12), RoundedCornerShape(10.dp))
+                            .padding(12.dp),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "小米/MIUI 需额外授权",
+                                color = Color(0xFFFFC46B),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                miuiHint,
+                                color = Color(0xFFF0D9B0),
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp,
+                            )
+                            ActionButton(
+                                text = "去开启通知类短信权限",
+                                color = Color(0xFFBA7517),
+                            ) { vm.openPermissionManager() }
+                        }
+                    }
+                }
             }
 
             // ---- 3. 接收人
@@ -329,5 +359,6 @@ private val TIPS = """Android 8 以后第三方应用无法靠静态注册接收
 2. 关闭本应用的电池优化（省电策略设为「无限制」）；
 3. 多任务界面把本应用卡片下拉锁定；
 4. 部分 ROM（MIUI / ColorOS / EMUI）需额外打开「通知栏常驻」；
-5. 转发会占用本机短信通道，运营商可能计费，请自行确认套餐；
-6. 全部数据仅存本机，免登录、不联网（应用未申请网络权限），卸载即丢失。"""
+5. 小米/MIUI 特有：验证码属于「通知类短信」，需在「安全中心 → 授权管理 → 本应用 → 权限」勾选「通知类短信」，否则普通短信能收到但验证码收不到；
+6. 转发会占用本机短信通道，运营商可能计费，请自行确认套餐；
+7. 全部数据仅存本机，免登录、不联网（应用未申请网络权限），卸载即丢失。"""

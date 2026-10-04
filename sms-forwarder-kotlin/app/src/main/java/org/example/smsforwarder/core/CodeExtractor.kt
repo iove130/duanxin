@@ -69,7 +69,8 @@ object CodeExtractor {
     /** 形态上是否像一个验证码。 */
     private fun isPlausibleCode(num: String): Boolean {
         if (num.length !in 4..8) return false
-        if (num.toSet().size == 1) return false          // 111111 / 000000
+        // 注意：不能排除「全同数字」——8888 / 0000 在部分服务里确实是验证码。
+        // 真正该排除的是长度异常的（如 1111111111）。
         return true
     }
 
