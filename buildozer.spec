@@ -50,6 +50,7 @@ p4a.branch = master
 
 [buildozer]
 log_level = 2
-warn_on_root = 1
+# CI 构建机常以 root 运行且无 TTY，必须为 0 否则 buildozer 交互式确认导致 EOFError
+warn_on_root = 0
 build_dir = ./.buildozer
 bin_dir = ./bin
