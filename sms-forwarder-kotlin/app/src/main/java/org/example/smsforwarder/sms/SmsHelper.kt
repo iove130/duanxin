@@ -139,8 +139,56 @@ object SmsHelper {
                 body = m.messageBody.orEmpty(),
                 time = formatTime(m.timestampMillis),
                 sim = simName,
+                rawDate = m.timestampMillis,
             )
         }
+    }
+
+    /**
+     * 兜底通道：直接读系统短信库里最近的收件短信。
+     *
+     * 小米 / 华为等 ROM 会对「验证码 / 通知类短信」做安全保护——
+     * 这类短信**不会**广播给第三方应用，但仍然会写入短信数据库
+     * （否则系统短信 App 自己也显示不出来）。
+     * 因此这里绕开广播，用 ContentObserver + 查库的方式补上这条链路。
+     *
+     * 返回按时间倒序排列的收件短信（最新的在前）。
+     */
+    @SuppressLint("MissingPermission")
+    fun recentInbox(context: Context, limit: Int = 10): List<SmsMsg> {
+        if (!hasPermission(context, Manifest.permission.READ_SMS)) return emptyList()
+        val out = ArrayList<SmsMsg>(limit)
+        runCatching {
+            val cursor = context.contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(
+                    Telephony.Sms.ADDRESS,
+                    Telephony.Sms.BODY,
+                    Telephony.Sms.DATE,
+                ),
+                "${Telephony.Sms.TYPE} = ?",
+                arrayOf(Telephony.Sms.MESSAGE_TYPE_INBOX.toString()),
+                "${Telephony.Sms.DATE} DESC",
+            ) ?: return@runCatching
+            cursor.use { c ->
+                val iAddr = c.getColumnIndex(Telephony.Sms.ADDRESS)
+                val iBody = c.getColumnIndex(Telephony.Sms.BODY)
+                val iDate = c.getColumnIndex(Telephony.Sms.DATE)
+                while (c.moveToNext() && out.size < limit) {
+                    val date = if (iDate >= 0) c.getLong(iDate) else 0L
+                    out.add(
+                        SmsMsg(
+                            from = if (iAddr >= 0) c.getString(iAddr).orEmpty() else "",
+                            body = if (iBody >= 0) c.getString(iBody).orEmpty() else "",
+                            time = formatTime(date),
+                            sim = "未知",
+                            rawDate = date,
+                        ),
+                    )
+                }
+            }
+        }
+        return out
     }
 
     private fun formatTime(millis: Long): String =
@@ -157,50 +205,81 @@ object SmsHelper {
         Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }
 
-    /**
-     * 是否是 MIUI / HyperOS 系��。
-     * 这些系统对「验证码 / 通知类短信」有独立的安全保护：
-     * 普通短信广播能收到，验证码短信收不到，必须由用户在
-     * 「安全中心 → 授权管理 → 本应用 → 权限」里手动勾选「通知类短信」。
-     * 这是系统级授权，应用代码无法自行开启，只能检测并引导。
-     */
-    fun isMiui(): Boolean {
-        val rom = runCatching {
-            @Suppress("DEPRECATION")
-            android.os.Build.MANUFACTURER
-        }.getOrNull().orEmpty()
-        if (!rom.equals("Xiaomi", ignoreCase = true)) return false
-        val prop = runCatching {
-            @Suppress("DEPRECATION")
-            Class.forName("android.os.MiuiOs").getMethod("getBuildType")?.invoke(null)?.toString()
-        }.getOrNull().orEmpty()
-        return prop.isNotEmpty() || runCatching {
-            @Suppress("DEPRECATION")
-            Class.forName("miui.os.Build").getName()
-        }.isSuccess
+    /** 读系统属性（MIUI / 澎湃 OS 通用，隐藏 API 用反射，失败返回空串）。 */
+    private fun sysProp(key: String): String = runCatching {
+        val clazz = Class.forName("android.os.SystemProperties")
+        val get = clazz.getMethod("get", String::class.java)
+        get.invoke(null, key) as? String ?: ""
+    }.getOrDefault("")
+
+    /** ROM 代号，用于文案区分：澎湃 OS(HyperOS) / MIUI / 其他。 */
+    fun romLabel(): String = when {
+        sysProp("ro.mi.os.version.name").isNotEmpty() -> "澎湃OS(HyperOS)"
+        sysProp("ro.miui.ui.version.name").isNotEmpty() -> "MIUI"
+        Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) -> "小米"
+        else -> ""
     }
 
-    /** 验证码短信在 MIUI 上需要额外授权，这里给出明确引导文案。 */
-    fun miuiCodeSmsHint(): String =
-        "检测到小米/MIUI 系统：验证码属于「通知类短信」，需手动开启才能接收。\n" +
-            "路径：安全中心 → 授权管理 → 短信转发器 → 权限 → 勾选「通知类短信」\n" +
-            "（未开启时普通短信能收到，验证码短信会被系统拦截）"
+    /**
+     * 是否是小米系 ROM（MIUI 或澎湃 HyperOS）。
+     *
+     * 注意：澎湃 OS 已经不再暴露 `miui.os.Build`，只按 MIUI 特征判断会漏判，
+     * 所以这里以厂商名为主、系统属性为辅，两者任一命中即认为是小米设备。
+     *
+     * 这些系统对「验证码 / 通知类短信」有独立的安全保护：
+     * 普通短信广播能收到，验证码短信收不到，必须由用户在
+     * 「设置 → 应用设置 → 应用管理 → 本应用 → 权限管理」里手动允许「通知类短信」。
+     * 这是系统级授权，应用代码无法自行开启，只能检测并引导。
+     */
+    fun isXiaomiRom(): Boolean {
+        val man = Build.MANUFACTURER.orEmpty()
+        val brand = Build.BRAND.orEmpty()
+        val byVendor = listOf(man, brand).any {
+            it.equals("Xiaomi", ignoreCase = true) ||
+                it.equals("Redmi", ignoreCase = true) ||
+                it.equals("POCO", ignoreCase = true)
+        }
+        if (byVendor) return true
+        return sysProp("ro.miui.ui.version.name").isNotEmpty() ||
+            sysProp("ro.mi.os.version.name").isNotEmpty()
+    }
 
-    /** 尝试跳到 MIUI 授权管理页；失败则退回应用详情页。 */
+    /** 验证码短信在小米系 ROM 上需要额外授权，这里给出明确引导文案。 */
+    fun xiaomiCodeSmsHint(): String {
+        val rom = romLabel().ifEmpty { "小米" }
+        return "检测到 $rom：验证码属于「通知类短信」，系统默认不广播给第三方应用。\n" +
+            "本应用已开启「短信库兜底通道」，多数机型无需额外设置即可转发验证码。\n" +
+            "若日志里始终看不到验证码，再手动开启：\n" +
+            "设置 → 应用设置 → 应用管理 → 短信转发器 → 权限管理 → 通知类短信 → 允许\n" +
+            "（旧版 MIUI：安全中心 → 授权管理 → 应用权限 → 短信转发器 → 通知类短信）"
+    }
+
+    /** 尝试跳到小米授权管理页（澎湃 OS 与 MIUI 共用同一入口）；失败则退回应用详情页。 */
     fun openPermissionManager(context: Context) {
         val pkg = context.packageName
-        val candidates = listOf(
-            "miui.intent.action.APP_PERM_EDITOR",
-            "miui.intent.action.APP_PERM_EDITOR_EXTRA",
+        // 三个入口按命中顺序尝试：新版安全中心 → 旧版权限中心 → 系统应用详情页
+        val attempts = listOf(
+            Triple(
+                "miui.intent.action.APP_PERM_EDITOR",
+                "com.miui.securitycenter",
+                "com.miui.permcenter.permissions.PermissionsEditorActivity",
+            ),
+            Triple(
+                "miui.intent.action.APP_PERM_EDITOR_EXTRA",
+                "com.miui.securitycenter",
+                "com.miui.permcenter.permissions.PermissionsEditorActivity",
+            ),
+            Triple(
+                "android.settings.APPLICATION_DETAILS_SETTINGS",
+                "com.android.settings",
+                "com.android.settings.applications.InstalledAppDetailsTop",
+            ),
         )
         var opened = false
-        for (action in candidates) {
+        for ((action, pkgName, cls) in attempts) {
             val ok = runCatching {
                 val intent = Intent(action).apply {
-                    setClassName(
-                        "com.miui.securitycenter",
-                        "com.miui.permcenter.permissions.PermissionsEditorActivity",
-                    )
+                    setClassName(pkgName, cls)
                     putExtra("extra_pkgname", pkg)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }

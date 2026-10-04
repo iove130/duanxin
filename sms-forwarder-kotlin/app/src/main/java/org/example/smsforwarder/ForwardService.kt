@@ -1,5 +1,6 @@
 package org.example.smsforwarder
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,8 +11,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
+import android.provider.Telephony
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
@@ -47,13 +52,27 @@ class ForwardService : Service() {
     private var smsReceiver: BroadcastReceiver? = null
     private var sims: List<SimInfo> = emptyList()
 
+    // ------------------------------------------------ 兜底通道（短信库直读）
+    private var observerThread: HandlerThread? = null
+    private var smsObserver: ContentObserver? = null
+
+    /** 已处理到的最新短信时间戳；启动时用当前库内最大值做基线，避免补发历史短信。 */
+    private var lastSeenDate: Long = 0L
+
+    /** 广播通道与数据库通道会同时看到同一条短信，用它做一次性去重。 */
+    private val seenLock = Any()
+    private val seenKeys = LinkedHashSet<String>()
+
     override fun onCreate() {
         super.onCreate()
         store = ConfigStore(this)
         store.setServiceShouldRun(true)
         startForegroundCompat()
         registerSmsReceiver()
+        registerSmsObserver()
         startHeartbeat()
+        // 先扫一次库，只为建立基线（不转发历史短信）
+        serviceScope.launch { scanInbox() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -72,6 +91,7 @@ class ForwardService : Service() {
         // 由 BootReceiver / 下次打开 App 时恢复，不要在这里清标志。
         store.setServiceShouldRun(true)
         unregisterSmsReceiver()
+        unregisterSmsObserver()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -155,6 +175,96 @@ class ForwardService : Service() {
         smsReceiver = null
     }
 
+    // ------------------------------------------------ 兜底通道：短信库直读
+    /**
+     * 注册短信数据库监听。
+     *
+     * 小米 / 华为的「通知类短信保护」会在**广播层**就把验证码短信掐掉，
+     * 第三方应用永远收不到 [SMS_RECEIVED_ACTION]。但短信依然会落进系统短信库，
+     * 所以这里用 ContentObserver 直接监听库变化，补上这条链路。
+     */
+    private fun registerSmsObserver() {
+        if (smsObserver != null) return
+        if (!SmsHelper.hasPermission(this, Manifest.permission.READ_SMS)) {
+            log("warn", "未授予读取短信权限，兜底通道未启用（验证码可能收不到）")
+            return
+        }
+        val thread = HandlerThread("sms-db-observer").apply { start() }
+        val observer = object : ContentObserver(Handler(thread.looper)) {
+            override fun onChange(selfChange: Boolean) {
+                serviceScope.launch { scanInbox() }
+            }
+        }
+        runCatching {
+            contentResolver.registerContentObserver(
+                Telephony.Sms.CONTENT_URI,
+                true, // 连同 sent / draft 等子 URI 一起监听
+                observer,
+            )
+        }.onSuccess {
+            observerThread = thread
+            smsObserver = observer
+            log("info", "已启用短信库兜底通道（验证码被系统拦截时仍可转发）")
+        }.onFailure {
+            log("warn", "兜底通道注册失败：${it.message}")
+            thread.quitSafely()
+        }
+    }
+
+    private fun unregisterSmsObserver() {
+        smsObserver?.let { runCatching { contentResolver.unregisterContentObserver(it) } }
+        smsObserver = null
+        observerThread?.quitSafely()
+        observerThread = null
+    }
+
+    /**
+     * 扫描短信库里新增的收件短信并按需转发。
+     * 首次调用只建立基线，不转发，避免把历史验证码一次性补发出去。
+     */
+    private suspend fun scanInbox() {
+        val all = SmsHelper.recentInbox(this, 10)
+        if (all.isEmpty()) return
+
+        if (lastSeenDate == 0L) {
+            lastSeenDate = all.maxOf { it.rawDate }
+            return
+        }
+
+        val fresh = all.filter { it.rawDate > lastSeenDate }.sortedBy { it.rawDate }
+        if (fresh.isEmpty()) return
+        // 先推进水位，即使当前暂停转发也不至于恢复后补发一批旧短信
+        lastSeenDate = maxOf(lastSeenDate, fresh.maxOf { it.rawDate })
+
+        val cfg = store.loadConfig()
+        if (!cfg.enabled) return
+        dedup.updateWindow(cfg.dedupMinutes)
+
+        for (m in fresh) {
+            runCatching { processOne(m, cfg) }
+                .onFailure { log("error", "兜底通道处理异常: ${it.message}", m.from) }
+        }
+    }
+
+    /** 同一条短信只处理一次（广播与短信库两条通道会重复看到它）。 */
+    private fun markSeen(msg: SmsMessage): Boolean {
+        val key = "${msg.from}|${msg.body}|${msg.rawDate}"
+        synchronized(seenLock) {
+            if (!seenKeys.add(key)) return false
+            // 简单 LRU：超过 200 条就丢掉最早的一批
+            if (seenKeys.size > 200) {
+                val it = seenKeys.iterator()
+                var n = 0
+                while (it.hasNext() && n < 50) {
+                    it.next()
+                    it.remove()
+                    n++
+                }
+            }
+            return true
+        }
+    }
+
     // ------------------------------------------------------------ 心跳
     private fun startHeartbeat() {
         serviceScope.launch {
@@ -186,6 +296,8 @@ class ForwardService : Service() {
         }
 
         for (m in items) {
+            // 广播通道先看��，兜底通道就不会重复转发同一条
+            if (m.rawDate > lastSeenDate) lastSeenDate = m.rawDate
             runCatching { processOne(m, cfg) }
                 .onFailure { log("error", "处理短信异常: ${it.message}", m.from) }
         }
@@ -194,6 +306,13 @@ class ForwardService : Service() {
     private suspend fun processOne(msg: SmsMessage, cfg: org.example.smsforwarder.core.ForwardConfig) {
         val sender = msg.from
         val body = msg.body
+
+        // 广播与短信库两条通道都会触发这里，先做一次性去重
+        if (!markSeen(msg)) {
+            log("skip", "[$sender] 同一条短信已处理，跳过", sender)
+            return
+        }
+
         val (shouldForward, reason, word) = Rules.shouldForward(msg, cfg)
         if (!shouldForward) {
             // 未命中时也记一笔，否则界面上看不到任何线索，无法排查

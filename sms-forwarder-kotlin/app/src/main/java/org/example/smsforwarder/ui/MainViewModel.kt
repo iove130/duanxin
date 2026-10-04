@@ -1,5 +1,6 @@
 package org.example.smsforwarder.ui
 
+import android.Manifest
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -145,12 +146,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** MIUI 验证码短信需要额外授权，返回引导文案；非 MIUI 返回空串。 */
-    fun miuiHint(): String = if (SmsHelper.isMiui()) SmsHelper.miuiCodeSmsHint() else ""
+    /** 小米系 ROM（MIUI / 澎湃OS）验证码短信需额外授权时返回引导文案，否则空串。 */
+    fun romHint(): String = if (SmsHelper.isXiaomiRom()) SmsHelper.xiaomiCodeSmsHint() else ""
 
     fun openPermissionManager(): Boolean {
         SmsHelper.openPermissionManager(getApplication())
         return true
+    }
+
+    /**
+     * 自检：能否绕过广播直接读到系统短信库。
+     * 结果写进日志面板——用户点一下就知道「兜底通道」在自己的机型上是否可用。
+     */
+    fun probeInbox() {
+        val ctx = getApplication<Application>()
+        val msg = if (!SmsHelper.hasPermission(ctx, Manifest.permission.READ_SMS)) {
+            "自检失败：未授予「读取短信」权限，兜底通道无法启用"
+        } else {
+            val list = SmsHelper.recentInbox(ctx, 5)
+            if (list.isEmpty()) {
+                "自检失败：读不到任何短信。当前 ROM 禁止第三方应用访问短信库，" +
+                    "只能走广播通道——请确认已在系统设置里允许「通知类短信」"
+            } else {
+                "自检通过：读到 ${list.size} 条收件短信，最新来自 ${list.first().from}，" +
+                    "兜底通道可用（验证码被系统拦截时仍能转发）"
+            }
+        }
+        store.appendLog(
+            LogEntry(ts = SmsHelper.formatNow(), level = "info", msg = msg),
+        )
+        refresh()
     }
 
     // ------------------------------------------------------------ 便捷更新

@@ -35,6 +35,8 @@ data class SmsMessage(
     val body: String,
     val time: String,
     val sim: String,
+    /** 短信原始时间戳（毫秒），仅用于去重与增量扫描，不参与渲染。 */
+    val rawDate: Long = 0L,
 )
 
 /** 转发配置的不可变快照。 */

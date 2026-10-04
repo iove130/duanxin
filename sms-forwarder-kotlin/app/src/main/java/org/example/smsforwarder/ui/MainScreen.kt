@@ -150,9 +150,9 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                     color = Card2Dark,
                 ) { vm.openBatterySettings() }
 
-                // MIUI 专属：验证码属于「通知类短信」，需系统级授权才能收到
-                val miuiHint = vm.miuiHint()
-                if (miuiHint.isNotEmpty()) {
+                // 小米系 ROM（MIUI / 澎湃OS）：验证码属于「通知类短信」，可能被系统拦截
+                val romHint = vm.romHint()
+                if (romHint.isNotEmpty()) {
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -161,13 +161,13 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                "小米/MIUI 需额外授权",
+                                "小米手机（澎湃OS / MIUI）提示",
                                 color = Color(0xFFFFC46B),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                miuiHint,
+                                romHint,
                                 color = Color(0xFFF0D9B0),
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp,
@@ -179,6 +179,11 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                         }
                     }
                 }
+
+                ActionButton(
+                    text = "短信库自检（看兜底通道是否可用）",
+                    color = Card2Dark,
+                ) { vm.probeInbox() }
             }
 
             // ---- 3. 接收人
@@ -359,6 +364,6 @@ private val TIPS = """Android 8 以后第三方应用无法靠静态注册接收
 2. 关闭本应用的电池优化（省电策略设为「无限制」）；
 3. 多任务界面把本应用卡片下拉锁定；
 4. 部分 ROM（MIUI / ColorOS / EMUI）需额外打开「通知栏常驻」；
-5. 小米/MIUI 特有：验证码属于「通知类短信」，需在「安全中心 → 授权管理 → 本应用 → 权限」勾选「通知类短信」，否则普通短信能收到但验证码收不到；
+5. 小米手机（澎湃OS / MIUI）：验证码属于「通知类短信」，系统可能不广播给第三方应用。本应用已启用「短信库兜底通道」，一般无需额外设置；仍收不到时再在「设置 → 应用设置 → 应用管理 → 短信转发器 → 权限管理」允许「通知类短信」；
 6. 转发会占用本机短信通道，运营商可能计费，请自行确认套餐；
 7. 全部数据仅存本机，免登录、不联网（应用未申请网络权限），卸载即丢失。"""
