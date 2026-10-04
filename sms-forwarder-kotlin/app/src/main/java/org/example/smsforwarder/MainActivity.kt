@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
     private fun requestPermissions() {
         val missing = SmsHelper.missingPermissions(this)
         if (missing.isNotEmpty()) {
-            runCatching { permissionLauncher.launch(missing) }
+            runCatching { permissionLauncher.launch(missing.toTypedArray()) }
         }
     }
 }
