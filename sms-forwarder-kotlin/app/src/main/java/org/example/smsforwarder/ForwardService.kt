@@ -196,10 +196,8 @@ class ForwardService : Service() {
         val body = msg.body
         val (shouldForward, reason, word) = Rules.shouldForward(msg, cfg)
         if (!shouldForward) {
-            // 只记录「疑似命中但被拦」的情况，避免日志被垃圾短信刷满
-            if (word.isNotEmpty()) {
-                log("skip", "$sender | $reason", sender)
-            }
+            // 未命中时也记一笔，否则界面上看不到任何线索，无法排查
+            log("skip", "[$sender] 未转发：$reason", sender)
             return
         }
 
@@ -216,7 +214,15 @@ class ForwardService : Service() {
 
         if (cfg.delaySeconds > 0) delay(cfg.delaySeconds * 1000L)
 
-        val text = Rules.render(cfg.template, msg)
+        // AUTO 模式且勾选「只发验证码」时，直接发纯数字；
+        // 这样一条短信稳稳算 1 条（70 字内），不会因超长被拆成多条计费。
+        val useRawCode = cfg.keywordMode == org.example.smsforwarder.core.KeywordMode.AUTO &&
+            cfg.codeOnly &&
+            word.isNotEmpty() &&
+            word.all { it.isDigit() }
+
+        val text = if (useRawCode) word else Rules.render(cfg.template, msg)
+        if (useRawCode) log("info", "已提取验证码：$text", sender)
         for (phone in receivers) {
             if (cfg.splitSms && cfg.maxLen > 0 && text.length > cfg.maxLen) {
                 for (part in Rules.splitText(text, cfg.maxLen, true)) {

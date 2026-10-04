@@ -16,7 +16,9 @@ enum class SenderMode(val key: String, val label: String) {
 enum class KeywordMode(val key: String, val label: String) {
     ANY("any", "任一"),
     ALL("all", "全部"),
-    REGEX("regex", "正则");
+    REGEX("regex", "正则"),
+    /** 自动识别验证码：无需手填关键词，命中即提取纯数字码转发。 */
+    AUTO("auto", "自动识别验证码");
 
     companion object {
         fun fromKey(key: String?): KeywordMode =
@@ -52,6 +54,8 @@ data class ForwardConfig(
     val delaySeconds: Int = 0,
     val subsId: Int = -1,
     val logLimit: Int = 300,
+    /** AUTO 模式下：只转发提取出的纯数字验证码，不带发信人/时间等前缀。 */
+    val codeOnly: Boolean = true,
 ) {
     companion object {
         val DEFAULT = ForwardConfig()

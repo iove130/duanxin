@@ -41,6 +41,7 @@ class ConfigStore(context: Context) {
             delaySeconds = prefs.getInt(K_DELAY, d.delaySeconds),
             subsId = prefs.getInt(K_SUBS_ID, d.subsId),
             logLimit = prefs.getInt(K_LOG_LIMIT, d.logLimit),
+            codeOnly = prefs.getBoolean(K_CODE_ONLY, d.codeOnly),
         )
     }
 
@@ -61,6 +62,7 @@ class ConfigStore(context: Context) {
             putInt(K_DELAY, cfg.delaySeconds)
             putInt(K_SUBS_ID, cfg.subsId)
             putInt(K_LOG_LIMIT, cfg.logLimit)
+            putBoolean(K_CODE_ONLY, cfg.codeOnly)
         }.apply()
     }
 
@@ -144,6 +146,7 @@ class ConfigStore(context: Context) {
         private const val K_DELAY = "delay_seconds"
         private const val K_SUBS_ID = "subs_id"
         private const val K_LOG_LIMIT = "log_limit"
+        private const val K_CODE_ONLY = "code_only"
         private const val K_HEARTBEAT = "heartbeat"
         private const val K_SHOULD_RUN = "should_run"
         private const val K_LOG = "logs"

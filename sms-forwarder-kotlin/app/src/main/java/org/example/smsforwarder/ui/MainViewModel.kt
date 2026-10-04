@@ -160,4 +160,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setSplitSms(v: Boolean) = update { it.copy(splitSms = v) }
     fun setEnabled(v: Boolean) = update { it.copy(enabled = v) }
     fun setSubsId(id: Int) = update { it.copy(subsId = id) }
+    fun setCodeOnly(v: Boolean) = update { it.copy(codeOnly = v) }
 }

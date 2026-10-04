@@ -182,22 +182,39 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
             }
 
             // ---- 5. 关键词
-            SectionCard("关键词筛选", "任一=命中任意一个词即转发；全部=所有词同时出现；正则=每行一个正则表达式。") {
+            SectionCard(
+                "筛选方式",
+                "推荐用「自动识别验证码」：无需填写关键词，短信到达时自动提取纯数字验证码转发，且不会被拆成多条计费。",
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("模式", color = SubDark, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
                     ChipGroup(
-                        options = listOf("任一", "全部", "正则"),
+                        options = listOf("自动识别验证码", "任一", "全部", "正则"),
                         selected = draft.keywordMode.label,
                         onSelect = { vm.setKeywordMode(KeywordMode.fromLabel(it)) },
                     )
                 }
-                LabeledField(
-                    label = "",
-                    value = draft.keywords.joinToString("\n"),
-                    onValueChange = vm::setKeywords,
-                    placeholder = "例如 验证码 / 交易 / 余额",
-                    singleLine = false,
-                )
+
+                if (draft.keywordMode == KeywordMode.AUTO) {
+                    ToggleRow("只转发纯数字验证码", draft.codeOnly, vm::setCodeOnly)
+                    Text(
+                        "关闭后转发完整原文（含发信人与时间，会超 70 字按多条计费）。",
+                        color = SubDark, fontSize = 12.sp,
+                    )
+                } else {
+                    Text(
+                        "任一=命中任意一个词即转发；全部=所有词同时出现；正则=每行一个正则表达式。",
+                        color = SubDark, fontSize = 12.sp,
+                    )
+                    LabeledField(
+                        label = "",
+                        value = draft.keywords.joinToString("\n"),
+                        onValueChange = vm::setKeywords,
+                        placeholder = "例如 验证码 / 交易 / 余额",
+                        singleLine = false,
+                    )
+                }
+
                 LabeledField(
                     label = "屏蔽词（命中则不转发）",
                     value = draft.excludeKeywords.joinToString("\n"),

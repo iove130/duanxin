@@ -69,6 +69,12 @@ object Rules {
         mode: KeywordMode,
         caseSensitive: Boolean,
     ): Pair<Boolean, String> {
+        // AUTO：自动识别验证码，无需用户配置关键词
+        if (mode == KeywordMode.AUTO) {
+            val (ok, code) = CodeExtractor.extract(body)
+            return if (ok) true to code else false to ""
+        }
+
         val words = keywords.map { it.trim() }.filter { it.isNotEmpty() }
         if (words.isEmpty()) return true to ""
 
