@@ -39,6 +39,22 @@ data class SmsMessage(
     val rawDate: Long = 0L,
 )
 
+/** 联网推送渠道。 */
+enum class NetPreset(val key: String, val label: String, val hint: String) {
+    SERVERCHAN("serverchan", "Server酱", "填 SendKey，如 SCT123456xxxx"),
+    BARK("bark", "Bark", "填 Bark key（api.day.app 的那一段）"),
+    PUSHPLUS("pushplus", "PushPlus", "填 token"),
+    CUSTOM("custom", "自定义", "填完整 URL，POST JSON {\"code\":\"123456\"}");
+
+    companion object {
+        fun fromKey(key: String?): NetPreset =
+            entries.firstOrNull { it.key == key } ?: CUSTOM
+
+        fun fromLabel(label: String): NetPreset =
+            entries.firstOrNull { it.label == label } ?: CUSTOM
+    }
+}
+
 /** 转发配置的不可变快照。 */
 data class ForwardConfig(
     val enabled: Boolean = true,
@@ -58,6 +74,13 @@ data class ForwardConfig(
     val logLimit: Int = 300,
     /** AUTO 模式下：只转发提取出的纯数字验证码，不带发信人/时间等前缀。 */
     val codeOnly: Boolean = true,
+
+    // ------------------------------------------------ 联网推送（可选）
+    /** 是否启用联网推送。关闭时应用不产生任何网络流量。 */
+    val netEnabled: Boolean = false,
+    val netPreset: NetPreset = NetPreset.CUSTOM,
+    /** Server酱/Bark/PushPlus 填 key 或 token；自定义填完整 URL。 */
+    val netUrl: String = "",
 ) {
     companion object {
         val DEFAULT = ForwardConfig()

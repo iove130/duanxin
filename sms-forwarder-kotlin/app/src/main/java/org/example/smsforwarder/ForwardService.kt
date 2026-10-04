@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.example.smsforwarder.core.Deduplicator
 import org.example.smsforwarder.core.LogEntry
+import org.example.smsforwarder.core.NetSender
 import org.example.smsforwarder.core.Rules
 import org.example.smsforwarder.core.SmsMessage
 import org.example.smsforwarder.data.ConfigStore
@@ -342,6 +343,9 @@ class ForwardService : Service() {
 
         val text = if (useRawCode) word else Rules.render(cfg.template, msg)
         if (useRawCode) log("info", "已提取验证码：$text", sender)
+
+        pushOverNetwork(cfg, word, sender)
+
         for (phone in receivers) {
             if (cfg.splitSms && cfg.maxLen > 0 && text.length > cfg.maxLen) {
                 for (part in Rules.splitText(text, cfg.maxLen, true)) {
@@ -363,6 +367,36 @@ class ForwardService : Service() {
                 )
             }
         }
+    }
+
+    /**
+     * 联网推送。
+     *
+     * 安全边界：只推 [word] 里那个纯数字验证码，正文/发信人/时间一概不带。
+     * 未提取到纯数字码时直接放弃并记日志，绝不会退而求其次推全文。
+     */
+    private fun pushOverNetwork(
+        cfg: org.example.smsforwarder.core.ForwardConfig,
+        word: String,
+        sender: String,
+    ) {
+        if (!cfg.netEnabled) return
+        if (word.isEmpty() || !word.all { it.isDigit() }) {
+            log("skip", "联网推送跳过：只推送纯数字验证码，本次未提取到", sender, "net")
+            return
+        }
+        val req = NetSender.build(cfg.netPreset, cfg.netUrl, word)
+        if (req == null) {
+            log("error", "联网推送配置无效，请检查渠道与 Key/URL", sender, "net")
+            return
+        }
+        val (okNet, errNet) = NetSender.send(req)
+        log(
+            if (okNet) "info" else "error",
+            "联网推送(${cfg.netPreset.label}) ${if (okNet) "成功" else "失败 $errNet"}",
+            sender,
+            "net",
+        )
     }
 
     private fun log(level: String, msg: String, from: String = "", to: String = "") {

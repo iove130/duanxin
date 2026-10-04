@@ -3,10 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      安全说明：这里刻意不声明 android.permission.INTERNET。
-      本应用完全离线运行（免登录、纯本地），没有网络权限，
-      即使代码被恶意利用，短信数据也无法外传。
+      默认离线：联网推送是可选功能，关闭时应用不产生任何网络流量。
+      即使开启，也只有「自动识别出来的纯数字验证码」会被 POST 出去，
+      短信正文、发信人号码、时间都不会离开本机（见 NetSender.build 的签名约束）。
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- 短信收发 -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
@@ -35,6 +36,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.SmsForwarder"
+        android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
         <activity

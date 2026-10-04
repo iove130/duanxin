@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,8 @@ import org.example.smsforwarder.ForwardService
 import org.example.smsforwarder.core.ForwardConfig
 import org.example.smsforwarder.core.KeywordMode
 import org.example.smsforwarder.core.LogEntry
+import org.example.smsforwarder.core.NetPreset
+import org.example.smsforwarder.core.NetSender
 import org.example.smsforwarder.core.Rules
 import org.example.smsforwarder.core.SenderMode
 import org.example.smsforwarder.data.ConfigStore
@@ -159,23 +162,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * 结果写进日志面板——用户点一下就知道「兜底通道」在自己的机型上是否可用。
      */
     fun probeInbox() {
-        val ctx = getApplication<Application>()
-        val msg = if (!SmsHelper.hasPermission(ctx, Manifest.permission.READ_SMS)) {
-            "自检失败：未授予「读取短信」权限，兜底通道无法启用"
-        } else {
-            val list = SmsHelper.recentInbox(ctx, 5)
-            if (list.isEmpty()) {
-                "自检失败：读不到任何短信。当前 ROM 禁止第三方应用访问短信库，" +
-                    "只能走广播通道——请确认已在系统设置里允许「通知类短信」"
+        // 读短信库是 IO 操作，必须在后台线程，否则阻塞主线程
+        viewModelScope.launch(Dispatchers.IO) {
+            val ctx = getApplication<Application>()
+            val msg = if (!SmsHelper.hasPermission(ctx, Manifest.permission.READ_SMS)) {
+                "自检失败：未授予「读取短信」权限，兜底通道无法启用"
             } else {
-                "自检通过：读到 ${list.size} 条收件短信，最新来自 ${list.first().from}，" +
-                    "兜底通道可用（验证码被系统拦截时仍能转发）"
+                val list = SmsHelper.recentInbox(ctx, 5)
+                if (list.isEmpty()) {
+                    "自检失败：读不到任何短信。当前 ROM 禁止第三方应用访问短信库，" +
+                        "只能走广播通道——请确认已在系统设置里允许「通知类短信」"
+                } else {
+                    "自检通过：读到 ${list.size} 条收件短信，最新来自 ${list.first().from}，" +
+                        "兜底通道可用（验证码被系统拦截时仍能转发）"
+                }
             }
+            appendLog(msg)
         }
-        store.appendLog(
-            LogEntry(ts = SmsHelper.formatNow(), level = "info", msg = msg),
-        )
-        refresh()
     }
 
     // ------------------------------------------------------------ 便捷更新
@@ -194,4 +197,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setEnabled(v: Boolean) = update { it.copy(enabled = v) }
     fun setSubsId(id: Int) = update { it.copy(subsId = id) }
     fun setCodeOnly(v: Boolean) = update { it.copy(codeOnly = v) }
+    fun setNetEnabled(v: Boolean) = update { it.copy(netEnabled = v) }
+    fun setNetPreset(v: NetPreset) = update { it.copy(netPreset = v) }
+    fun setNetUrl(v: String) = update { it.copy(netUrl = v.trim()) }
+
+    /**
+     * 联网推送自检：发一个固定测试码 000000。
+     * 结果写进日志面板，方便确认 Key/URL 填对了没。
+     */
+    fun testNetPush() {
+        // 网络请求必须在后台线程，否则 NetworkOnMainThreadException
+        viewModelScope.launch(Dispatchers.IO) {
+            val cfg = store.loadConfig()
+            val req = NetSender.build(cfg.netPreset, cfg.netUrl, "000000")
+            val msg = when {
+                !cfg.netEnabled -> "联网推送未启用，请先打开开关并保存"
+                req == null -> "联网推送配置无效：${cfg.netPreset.label} 的 Key/URL 为空"
+                else -> {
+                    val (ok, err) = NetSender.send(req)
+                    if (ok) "联网推送自检成功（已发测试码 000000 到 ${cfg.netPreset.label}）"
+                    else "联网推送自检失败：$err"
+                }
+            }
+            appendLog(msg)
+        }
+    }
+
+    private fun appendLog(msg: String) {
+        store.appendLog(
+            LogEntry(ts = SmsHelper.formatNow(), level = "info", msg = msg),
+        )
+        refresh()
+    }
 }

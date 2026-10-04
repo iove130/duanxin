@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import org.example.smsforwarder.core.ForwardConfig
 import org.example.smsforwarder.core.KeywordMode
 import org.example.smsforwarder.core.LogEntry
+import org.example.smsforwarder.core.NetPreset
 import org.example.smsforwarder.core.SenderMode
 import org.example.smsforwarder.core.Rules
 import org.json.JSONArray
@@ -42,6 +43,9 @@ class ConfigStore(context: Context) {
             subsId = prefs.getInt(K_SUBS_ID, d.subsId),
             logLimit = prefs.getInt(K_LOG_LIMIT, d.logLimit),
             codeOnly = prefs.getBoolean(K_CODE_ONLY, d.codeOnly),
+            netEnabled = prefs.getBoolean(K_NET_ENABLED, d.netEnabled),
+            netPreset = NetPreset.fromKey(prefs.getString(K_NET_PRESET, d.netPreset.key)),
+            netUrl = prefs.getString(K_NET_URL, d.netUrl) ?: d.netUrl,
         )
     }
 
@@ -63,6 +67,9 @@ class ConfigStore(context: Context) {
             putInt(K_SUBS_ID, cfg.subsId)
             putInt(K_LOG_LIMIT, cfg.logLimit)
             putBoolean(K_CODE_ONLY, cfg.codeOnly)
+            putBoolean(K_NET_ENABLED, cfg.netEnabled)
+            putString(K_NET_PRESET, cfg.netPreset.key)
+            putString(K_NET_URL, cfg.netUrl)
         }.apply()
     }
 
@@ -147,6 +154,9 @@ class ConfigStore(context: Context) {
         private const val K_SUBS_ID = "subs_id"
         private const val K_LOG_LIMIT = "log_limit"
         private const val K_CODE_ONLY = "code_only"
+        private const val K_NET_ENABLED = "net_enabled"
+        private const val K_NET_PRESET = "net_preset"
+        private const val K_NET_URL = "net_url"
         private const val K_HEARTBEAT = "heartbeat"
         private const val K_SHOULD_RUN = "should_run"
         private const val K_LOG = "logs"

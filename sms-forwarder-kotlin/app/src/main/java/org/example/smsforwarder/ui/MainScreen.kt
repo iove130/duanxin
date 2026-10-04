@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.example.smsforwarder.core.KeywordMode
+import org.example.smsforwarder.core.NetPreset
 import org.example.smsforwarder.core.SenderMode
 import org.example.smsforwarder.sms.SmsHelper
 import org.example.smsforwarder.ui.theme.Accent
@@ -313,6 +314,31 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                 }
             }
 
+            // ---- 6.5 联网推送（可选）
+            SectionCard(
+                "联网推送（可选）",
+                "安全边界：联网只会 POST 出去提取到的纯数字验证码，短信正文、发信人、时间一律不外传。关闭时应用不产生任何网络流量。",
+            ) {
+                ToggleRow("启用联网推送", draft.netEnabled, vm::setNetEnabled)
+                Text("渠道", color = SubDark, fontSize = 13.sp)
+                ChipGroup(
+                    options = NetPreset.entries.map { it.label },
+                    selected = draft.netPreset.label,
+                    onSelect = { vm.setNetPreset(NetPreset.fromLabel(it)) },
+                )
+                LabeledField(
+                    label = "",
+                    value = draft.netUrl,
+                    onValueChange = vm::setNetUrl,
+                    placeholder = draft.netPreset.hint,
+                    singleLine = true,
+                )
+                ActionButton(
+                    text = "发送测试推送（测试码 000000）",
+                    color = Card2Dark,
+                ) { vm.testNetPush() }
+            }
+
             // ---- 7. 总开关 + 操作
             SectionCard("总开关") {
                 ToggleRow("启用短信转发", draft.enabled, vm::setEnabled)
@@ -366,4 +392,5 @@ private val TIPS = """Android 8 以后第三方应用无法靠静态注册接收
 4. 部分 ROM（MIUI / ColorOS / EMUI）需额外打开「通知栏常驻」；
 5. 小米手机（澎湃OS / MIUI）：验证码属于「通知类短信」，系统可能不广播给第三方应用。本应用已启用「短信库兜底通道」，一般无需额外设置；仍收不到时再在「设置 → 应用设置 → 应用管理 → 短信转发器 → 权限管理」允许「通知类短信」；
 6. 转发会占用本机短信通道，运营商可能计费，请自行确认套餐；
-7. 全部数据仅存本机，免登录、不联网（应用未申请网络权限），卸载即丢失。"""
+7. 联网推送默认关闭。开启后也只会把「提取到的纯数字验证码」POST 出去，
+   短信正文 / 发信人 / 时间不会离开本机；不开启则不产生任何网络流量。其余数据仅存本机，免登录，卸载即丢失。"""
