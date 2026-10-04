@@ -46,7 +46,10 @@ services = sms_forwarder:service/main.py:foreground
 # 主题色（深青绿）
 presplash.color = #0F6E56
 
-p4a.branch = master
+# 钉到稳定发布版：其 python3 recipe 用 CPython 3.11.5（master 已升到 3.14，
+# 与 NDK 28c 的 bionic 头文件不兼容，编译 remote_debugging.c 报 preadv/pwritev 未声明）
+# 该版本对应 NDK r25b，已在 ubuntu-22.04 上久经验证。
+p4a.branch = v2024.01.21
 
 [buildozer]
 log_level = 2
