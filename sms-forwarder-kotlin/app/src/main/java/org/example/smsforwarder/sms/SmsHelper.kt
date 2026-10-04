@@ -47,10 +47,11 @@ object SmsHelper {
 
     // ------------------------------------------------------------ 发送短信
     /**
-     * 取指定卡槽的 SmsManager。
+     * 取指定卡槽的SmsManager。
      * [SmsManager.createForSubscriptionId] 的静态方法在新版 SDK 已被隐藏/弃用，
      * 官方推荐从 [Context.getSystemService] 拿实例后再调实例方法，因此这里只走实例路径。
      */
+    @Suppress("DEPRECATION")
     private fun smsManager(context: Context, subsId: Int): SmsManager {
         if (subsId <= 0) return SmsManager.getDefault()
         val base = runCatching { context.getSystemService(SmsManager::class.java) }.getOrNull()

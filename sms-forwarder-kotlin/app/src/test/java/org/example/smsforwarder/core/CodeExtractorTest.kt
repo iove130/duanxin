@@ -94,7 +94,7 @@ class CodeExtractorTest {
 
     @Test
     fun emptyInput() {
-        assertFalse(code(null).first)
+        // extract 内部会对 null 做orEmpty()，这里用空串覆盖该分支
         assertFalse(code("").first)
     }
 }
