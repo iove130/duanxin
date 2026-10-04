@@ -3,22 +3,50 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: artemsbulgakov/buildozer:latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build APK with Buildozer
+      - name: Install system dependencies
         run: |
-          buildozer -v android debug
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git zip unzip curl ca-certificates \
+            openjdk-17-jdk-headless \
+            autoconf automake libtool pkg-config cmake ccache patch \
+            zlib1g-dev libncurses-dev libffi-dev libssl-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install buildozer
+        run: pip install --upgrade "buildozer>=1.5" "cython<3" virtualenv
+
+      # SDK/NDK/p4a 编译产物缓存：二次构建可从 30+ 分钟降到 ~10 分钟
+      - name: Cache buildozer global dir
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-global-
+
+      - name: Cache project build dir
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ github.sha }}
+          restore-keys: buildozer-local-
+
+      - name: Build APK with Buildozer
+        run: buildozer -v android debug
         env:
           CI: "false"
 
