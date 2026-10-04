@@ -47,8 +47,15 @@ jobs:
           key: buildozer-local-${{ github.sha }}
           restore-keys: buildozer-local-
 
+      # p4a 2024.01.21 自带 AGP 8.x，必须 Java 17 才能运行 gradle；
+      # runner 默认 JAVA_HOME 是 Java 11，这里显式切到 temurin-17。
       - name: Build APK with Buildozer
-        run: buildozer -v android debug
+        run: |
+          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+          export PATH="$JAVA_HOME/bin:$PATH"
+          echo "Java in use:"
+          java -version
+          buildozer -v android debug
         env:
           CI: "false"
 
