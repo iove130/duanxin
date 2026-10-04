@@ -58,6 +58,9 @@ $SUDO mkdir -p "$SDK/cmdline-tools" "$SDK/platforms" "$SDK/build-tools"
 dl "$MIRROR/commandlinetools-linux-11076708_latest.zip" /tmp/cmdtools.zip
 $SUDO unzip -q /tmp/cmdtools.zip -d "$SDK/cmdline-tools"
 [ -d "$SDK/cmdline-tools/latest" ] || $SUDO mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+# buildozer 按旧版目录结构找 $SDK/tools/bin/sdkmanager，做兼容软链
+$SUDO mkdir -p "$SDK/tools"
+$SUDO ln -sfn "$SDK/cmdline-tools/latest/bin" "$SDK/tools/bin"
 
 dl "$MIRROR/platform-tools_r34.0.5-linux.zip" /tmp/pt.zip
 $SUDO unzip -q -o /tmp/pt.zip -d "$SDK"
@@ -80,8 +83,10 @@ rm -rf /tmp/bt && mkdir -p /tmp/bt && unzip -q /tmp/bt.zip -d /tmp/bt
 $SUDO rm -rf "$SDK/build-tools/34.0.0"
 $SUDO mv /tmp/bt/* "$SDK/build-tools/34.0.0"
 
-step "3. 预下载 Android NDK r25b（腾讯镜像）"
+step "3. 预下载 Android NDK（腾讯镜像）"
+# 注意：p4a develop 当前推荐 28c（以构建日志中 Recommended NDK 为准），版本不符会去谷歌下载导致失败
 dl_any /tmp/ndk.zip \
+  "$MIRROR/android-ndk-r28c-linux.zip" \
   "$MIRROR/android-ndk-r25b-linux.zip" \
   "$MIRROR/android-ndk-r25b-linux-x86_64.zip"
 rm -rf /tmp/ndk && mkdir -p /tmp/ndk && unzip -q /tmp/ndk.zip -d /tmp/ndk
