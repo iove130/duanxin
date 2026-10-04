@@ -37,8 +37,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-          restore-keys: buildozer-global-
+          key: buildozer-global-2024-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-global-2024-
 
       - name: Cache project build dir
         uses: actions/cache@v4
