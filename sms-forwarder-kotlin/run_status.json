@@ -1,0 +1,14 @@
+{
+  "run_id": "37207110038",
+  "status": "completed",
+  "conclusion": "failure",
+  "problem_steps": [
+    [
+      6,
+      "Run unit tests (rule engine)",
+      "completed",
+      "failure"
+    ]
+  ],
+  "elapsed_min": 1.6
+}

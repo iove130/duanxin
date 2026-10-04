@@ -7,11 +7,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.provider.Telephony
 import android.telephony.SmsManager
 import android.telephony.SmsMessage
 import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
-import android.telephony.provider.Telephony
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import org.example.smsforwarder.core.SmsMessage as SmsMsg
@@ -46,25 +46,30 @@ object SmsHelper {
         missingPermissions(context).map { it.substringAfterLast('.') }
 
     // ------------------------------------------------------------ 发送短信
-    private fun smsManager(subsId: Int): SmsManager =
-        if (subsId > 0) {
-            runCatching { SmsManager.createForSubscriptionId(subsId) }.getOrNull()
-                ?: SmsManager.getDefault()
-        } else {
-            SmsManager.getDefault()
-        }
+    /**
+     * 取指定卡槽的 SmsManager。
+     * [SmsManager.createForSubscriptionId] 的静态方法在新版 SDK 已被隐藏/弃用，
+     * 官方推荐从 [Context.getSystemService] 拿实例后再调实例方法，因此这里只走实例路径。
+     */
+    private fun smsManager(context: Context, subsId: Int): SmsManager {
+        if (subsId <= 0) return SmsManager.getDefault()
+        val base = runCatching { context.getSystemService(SmsManager::class.java) }.getOrNull()
+            ?: return SmsManager.getDefault()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return SmsManager.getDefault()
+        return runCatching { base.createForSubscriptionId(subsId) }.getOrDefault(base)
+    }
 
     /**
      * 发送一条短信。长短信交给底层 divideMessage 自动分段。
      * 返回 [是否成功, 附加说明/错误信息]。
      */
-    fun sendSms(phone: String, text: String, subsId: Int = -1): Pair<Boolean, String> {
+    fun sendSms(context: Context, phone: String, text: String, subsId: Int = -1): Pair<Boolean, String> {
         val target = phone.trim()
         if (target.isEmpty()) return false to "接收人为空"
         if (text.isEmpty()) return false to "转发内容为空"
 
         return runCatching {
-            val manager = smsManager(subsId)
+            val manager = smsManager(context, subsId)
             val parts = manager.divideMessage(text)
             if (parts.size <= 1) {
                 manager.sendTextMessage(target, null, text, null, null)
@@ -100,15 +105,22 @@ object SmsHelper {
         }.getOrDefault(emptyList())
     }
 
-    /** 尝试读出短信来自哪个 SIM 槽位，失败返回「未知」。 */
-    fun simSlotOf(sms: SmsMessage, sims: List<SimInfo>): String {
-        return runCatching {
-            val sub = sms.subId
-            sims.firstOrNull { it.subsId == sub }?.let {
-                "卡${it.slot + 1}${if (it.carrier.isNotEmpty()) "(${it.carrier})" else ""}"
-            }
-        }.getOrNull() ?: "未知"
+    /**
+     * 根据订阅 ID 判断短信来自哪个 SIM 卡槽位，失败返回「未知」。
+     * 注意：SmsMessage 的 subId/subscriptionId 属于隐藏 API，直接引用会编译失败，
+     * 因此订阅 ID 统一从广播 Intent 的 extra 中读取。
+     */
+    fun simSlotOf(subId: Int, sims: List<SimInfo>): String {
+        if (subId <= 0 || sims.isEmpty()) return "未知"
+        return sims.firstOrNull { it.subsId == subId }?.let {
+            "卡${it.slot + 1}${if (it.carrier.isNotEmpty()) "(${it.carrier})" else ""}"
+        } ?: "未知"
     }
+
+    /** 从广播 Intent 中安全地取出订阅 ID（取不到返回 -1）。 */
+    private fun subscriptionIdOf(intent: Intent): Int = runCatching {
+        intent.getIntExtra("subscription", -1)
+    }.getOrDefault(-1)
 
     // ------------------------------------------------------------ 解析短信
     @SuppressLint("NewApi")
@@ -117,12 +129,15 @@ object SmsHelper {
             Telephony.Sms.Intents.getMessagesFromIntent(intent)
         }.getOrNull() ?: emptyArray()
 
+        val subId = subscriptionIdOf(intent)
+        val simName = simSlotOf(subId, sims)
+
         return messages.map { m ->
             SmsMsg(
                 from = m.displayOriginatingAddress ?: m.originatingAddress.orEmpty(),
                 body = m.messageBody.orEmpty(),
                 time = formatTime(m.timestampMillis),
-                sim = simSlotOf(m, sims),
+                sim = simName,
             )
         }
     }

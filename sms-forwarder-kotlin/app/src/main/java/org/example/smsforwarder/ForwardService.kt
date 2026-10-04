@@ -68,7 +68,9 @@ class ForwardService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        store.clearStopFlagCompat()
+        // 服务被系统回收属于非预期退出，重新置为「期望运行」，
+        // 由 BootReceiver / 下次打开 App 时恢复，不要在这里清标志。
+        store.setServiceShouldRun(true)
         unregisterSmsReceiver()
         serviceScope.cancel()
         super.onDestroy()
@@ -131,7 +133,9 @@ class ForwardService : Service() {
             }
         }
         val filter = IntentFilter(SMS_RECEIVED_ACTION).apply {
-            priority = IntentFilter.MAX_PRIORITY
+            // 最高优先级：抢在别的短信应用之前拿到广播（系统对普通应用限 999，这里用常量上限）
+            @Suppress("DEPRECATION")
+            priority = Int.MAX_VALUE
         }
         // Android 13+ 注册广播需要显式指定导出属性
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -216,7 +220,7 @@ class ForwardService : Service() {
         for (phone in receivers) {
             if (cfg.splitSms && cfg.maxLen > 0 && text.length > cfg.maxLen) {
                 for (part in Rules.splitText(text, cfg.maxLen, true)) {
-                    val (okSend, err) = SmsHelper.sendSms(phone, part, cfg.subsId)
+                    val (okSend, err) = SmsHelper.sendSms(this, phone, part, cfg.subsId)
                     log(
                         if (okSend) "info" else "error",
                         "转发明细 -> $phone ${err.ifEmpty { "成功" }}",
@@ -226,7 +230,7 @@ class ForwardService : Service() {
                     delay(300)
                 }
             } else {
-                val (okSend, err) = SmsHelper.sendSms(phone, text, cfg.subsId)
+                val (okSend, err) = SmsHelper.sendSms(this, phone, text, cfg.subsId)
                 log(
                     if (okSend) "info" else "error",
                     "转发 -> $phone ${if (err.isEmpty()) "成功" else "($err)"}",
@@ -254,7 +258,6 @@ class ForwardService : Service() {
     private fun stopForwarding() {
         log("info", "收到停止指令，服务即将退出")
         store.setServiceShouldRun(false)
-        store.clearStopFlagCompat()
         stopForegroundCompat()
         stopSelf()
     }

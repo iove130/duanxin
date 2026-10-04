@@ -37,20 +37,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun maybeRequestPermissions() {
-        if (SmsHelper.missingPermissions(this).isNotEmpty()) {
-            permissionLauncher.launch(SmsHelper.REQUIRED_PERMISSIONS)
-        }
+        // 一次性把所有缺失权限合并成一次请求：
+        // ActivityResultLauncher 在上一次结果回调前再次 launch 会抛 IllegalStateException。
+        val wanted = ArrayList<String>()
+        wanted += SmsHelper.missingPermissions(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionLauncher.launch(
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-            )
+            val post = android.Manifest.permission.POST_NOTIFICATIONS
+            if (SmsHelper.hasPermission(this, post).not()) wanted += post
         }
+        if (wanted.isEmpty()) return
+        runCatching { permissionLauncher.launch(wanted.toTypedArray()) }
     }
 
     private fun requestPermissions() {
-        val missing = SmsHelper.REQUIRED_PERMISSIONS
+        val missing = SmsHelper.missingPermissions(this)
         if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing)
+            runCatching { permissionLauncher.launch(missing) }
         }
     }
 }

@@ -125,7 +125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val text = "【短信转发器】测试消息 " +
             java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                 .format(java.util.Date())
-        val (ok, err) = SmsHelper.sendSms(receiver, text, cfg.subsId)
+        val (ok, err) = SmsHelper.sendSms(ctx, receiver, text, cfg.subsId)
         return if (ok) "已发送测试短信" else "发送失败 $err"
     }
 
