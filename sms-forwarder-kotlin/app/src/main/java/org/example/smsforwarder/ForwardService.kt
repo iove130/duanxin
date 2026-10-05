@@ -346,6 +346,12 @@ class ForwardService : Service() {
 
         pushOverNetwork(cfg, word, sender)
 
+        if (receivers.isNotEmpty() && SmsHelper.isXiaomiRom()) {
+            // 澎湃OS/MIUI 默认弹「是否允许发送短信」，不点确认就静默丢弃，
+            // 而 sendTextMessage 依然返回成功——所以这里提前提醒，避免误判。
+            log("info", "小米系统会弹发送确认框，需点「确认发送」短信才真正发出", sender)
+        }
+
         for (phone in receivers) {
             if (cfg.splitSms && cfg.maxLen > 0 && text.length > cfg.maxLen) {
                 for (part in Rules.splitText(text, cfg.maxLen, true)) {

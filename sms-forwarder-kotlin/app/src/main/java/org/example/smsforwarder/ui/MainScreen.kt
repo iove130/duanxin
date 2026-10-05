@@ -181,6 +181,37 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
                     }
                 }
 
+                // 小米系 ROM 的发送确认弹窗由「系统优化」模块弹出，只能手动关
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF2A1A2E), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "发送短信时弹「是否允许发送」确认框",
+                            color = Color(0xFFFFC46B),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "这是澎湃OS/MIUI 的系统级保护，应用代码无法关闭，需要你手动关一次：\n" +
+                                "1. 设置 → 我的设备 → 全部参数 → 连点 7 次版本号，进入开发者模式\n" +
+                                "2. 设置 → 更多设置 → 开发者选项 → 关闭「启动系统优化」" +
+                                "（找不到该选项时，点「重置为默认值」多按几次就会显现）\n" +
+                                "关掉后本 App 即可全自动发送，不再需要每次点确认。",
+                            color = Color(0xFFEBD9F0),
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                        )
+                        ActionButton(
+                            text = "打开开发者选项",
+                            color = Color(0xFF7A3E9D),
+                        ) { vm.openDeveloperOptions() }
+                    }
+                }
+
                 ActionButton(
                     text = "短信库自检（看兜底通道是否可用）",
                     color = Card2Dark,
@@ -392,5 +423,9 @@ private val TIPS = """Android 8 以后第三方应用无法靠静态注册接收
 4. 部分 ROM（MIUI / ColorOS / EMUI）需额外打开「通知栏常驻」；
 5. 小米手机（澎湃OS / MIUI）：验证码属于「通知类短信」，系统可能不广播给第三方应用。本应用已启用「短信库兜底通道」，一般无需额外设置；仍收不到时再在「设置 → 应用设置 → 应用管理 → 短信转发器 → 权限管理」允许「通知类短信」；
 6. 转发会占用本机短信通道，运营商可能计费，请自行确认套餐；
-7. 联网推送默认关闭。开启后也只会把「提取到的纯数字验证码」POST 出去，
+7. 发送短信时弹「是否允许发送」确认框：这是澎湃OS/MIUI 系统优化模块的行为，
+   应用无法关闭，需在「开发者选项」里关闭「启动系统优化」；
+8. 建议开启「自动识别验证码 + 只转发纯数字」：一条验证码只发一条、
+   只需确认一次，也不会因超 70 字被拆成多条计费；
+9. 联网推送默认关闭。开启后也只会把「提取到的纯数字验证码」POST 出去，
    短信正文 / 发信人 / 时间不会离开本机；不开启则不产生任何网络流量。其余数据仅存本机，免登录，卸载即丢失。"""

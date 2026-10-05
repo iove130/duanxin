@@ -157,6 +157,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** 跳转开发者选项——关闭「启动系统优化」才能去掉发送短信的确认弹窗。 */
+    fun openDeveloperOptions(): Boolean {
+        SmsHelper.openDeveloperOptions(getApplication())
+        return true
+    }
+
     /**
      * 自检：能否绕过广播直接读到系统短信库。
      * 结果写进日志面板——用户点一下就知道「兜底通道」在自己的机型上是否可用。

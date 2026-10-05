@@ -313,4 +313,21 @@ object SmsHelper {
             context.startActivity(intent)
         }
     }
+
+    /**
+     * 跳转开发者选项。
+     *
+     * 小米系 ROM 的「是否允许 XX 发送短信」确认弹窗由**系统优化（MIUI优化）**模块弹出，
+     * 应用无法用代码关闭，只能让用户到开发者选项里把「启动系统优化」关掉。
+     * 这个入口是系统级设置，权限再牛也绕不过去。
+     */
+    fun openDeveloperOptions(context: Context) {
+        val opened = runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
+        if (!opened) openAppSettings(context)
+    }
 }
