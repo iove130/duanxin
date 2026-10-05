@@ -67,12 +67,14 @@ fun MainScreen(onRequestPermissions: () -> Unit = {}) {
     val scrollState = rememberScrollState()
     // 刻意用普通 map 而不是 snapshot state：它在 layout 阶段被写、
     // 只在协程里读一次，用 snapshot state 会白白触发重组。
-    val cardOffsets = remember { HashMap<String, Int>() }
+    // value 是 Float：LayoutCoordinates.positionInParent() 返回 Float。
+    val cardOffsets = remember { HashMap<String, Float>() }
     var pendingScroll by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(pendingScroll) {
         val key = pendingScroll ?: return@LaunchedEffect
-        cardOffsets[key]?.let { scrollState.animateScrollTo(it) }
+        // animateScrollTo 收 Int，锚点是 Float，这里取整并夹到非负
+        cardOffsets[key]?.let { scrollState.animateScrollTo(it.toInt().coerceAtLeast(0)) }
         pendingScroll = null
     }
 
