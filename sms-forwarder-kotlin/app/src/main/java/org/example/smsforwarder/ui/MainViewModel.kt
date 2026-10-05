@@ -31,6 +31,8 @@ data class UiState(
     val logs: List<LogEntry> = emptyList(),
     val sims: List<SimInfo> = emptyList(),
     val draft: ForwardConfig = ForwardConfig.DEFAULT,
+    /** 草稿与已保存配置是否有差异——用于顶部「未保存」提醒。 */
+    val dirty: Boolean = false,
 )
 
 /**
@@ -44,11 +46,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /** 已落盘的配置快照，用于算「有没有未保存的修改」。 */
+    private var savedSnapshot: ForwardConfig = store.loadConfig()
+
     init {
         loadDraft()
         refresh()
-        // 定时刷新服务状态与日志
-        viewModelScope.launch {
+        // 定时刷新服务状态与日志。
+        // 放到 IO 线程：readLogs() 要解析整份 JSON 日志（最多 300 条），
+        // 放主线程会周期性掉帧，手势会明显发涩。
+        viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
                 delay(1500)
                 refresh()
@@ -57,44 +64,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadDraft() {
+        val loaded = store.loadConfig()
+        savedSnapshot = loaded
         _state.value = _state.value.copy(
-            draft = store.loadConfig(),
+            draft = loaded,
             sims = SmsHelper.activeSims(getApplication()),
+            permText = permTextOf(),
+            // 草稿与已保存配置可能因历史数据格式不同而不一致，启动时先对齐一次，
+            // 否则一进来顶部就报「有未保存的修改」，是假信号。
+            dirty = false,
         )
     }
 
+    private fun permTextOf(): String {
+        val missing = SmsHelper.missingPermissions(getApplication())
+        return if (missing.isEmpty()) {
+            "短信权限已授予"
+        } else {
+            "未授权：" + SmsHelper.missingShortNames(getApplication()).take(3).joinToString(", ")
+        }
+    }
+
     fun refresh() {
-        val ctx = getApplication<Application>()
         val alive = store.isServiceAlive()
         val hb = store.readHeartbeat()
         val hbText = if (hb <= 0) {
-            "心跳：--"
+            "服务未启动"
         } else {
             val secs = (System.currentTimeMillis() - hb) / 1000
-            if (alive) "心跳：${secs} 秒前（进程存活）" else "上次心跳：${secs} 秒前（已掉线）"
-        }
-        val permText = if (SmsHelper.missingPermissions(ctx).isEmpty()) {
-            "短信权限已授予"
-        } else {
-            "未授权：" + SmsHelper.missingShortNames(ctx).take(3).joinToString(", ")
+            if (alive) "$secs 秒前活跃 · 进程存活" else "最后活跃在 $secs 秒前 · 进程可能已掉线"
         }
         _state.value = _state.value.copy(
             serviceRunning = alive,
             heartbeatText = hbText,
-            permText = permText,
+            permText = permTextOf(),
             logs = store.readLogs().takeLast(40).reversed(),
+            dirty = _state.value.draft != savedSnapshot,
         )
     }
 
     // ------------------------------------------------------------ 表单编辑
     fun update(transform: (ForwardConfig) -> ForwardConfig) {
-        _state.value = _state.value.copy(draft = transform(_state.value.draft))
+        val next = transform(_state.value.draft)
+        _state.value = _state.value.copy(draft = next, dirty = next != savedSnapshot)
     }
 
     fun save(): String {
         store.saveConfig(_state.value.draft)
+        savedSnapshot = _state.value.draft
+        _state.value = _state.value.copy(dirty = false)
         refresh()
         return "配置已保存，服务会自动生效"
+    }
+
+    /** 一键保存并启动——新用户最常见的诉求，不该让他分两步做。 */
+    fun saveAndStart(): String {
+        save()
+        val msg = startService()
+        return if (msg == "转发服务已启动") "配置已保存，转发服务已启动" else msg
     }
 
     fun startService(): String {
@@ -105,6 +132,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // 启动前先落盘配置，确保服务立刻用最新规则
         store.saveConfig(_state.value.draft)
+        savedSnapshot = _state.value.draft
+        _state.value = _state.value.copy(dirty = false)
         store.setServiceShouldRun(true)
         runCatching { ForwardService.start(ctx) }
             .onFailure { return "启动失败：${it.message}" }
@@ -152,6 +181,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 小米系 ROM（MIUI / 澎湃OS）验证码短信需额外授权时返回引导文案，否则空串。 */
     fun romHint(): String = if (SmsHelper.isXiaomiRom()) SmsHelper.xiaomiCodeSmsHint() else ""
 
+    fun isXiaomiRom(): Boolean = SmsHelper.isXiaomiRom()
+
     fun openPermissionManager(): Boolean {
         SmsHelper.openPermissionManager(getApplication())
         return true
@@ -193,9 +224,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setKeywords(text: String) = update { it.copy(keywords = Rules.parseList(text)) }
     fun setExclude(text: String) = update { it.copy(excludeKeywords = Rules.parseList(text)) }
     fun setTemplate(text: String) = update { it.copy(template = text) }
-    fun setMaxLen(text: String) = update { it.copy(maxLen = text.toIntOrNull() ?: 500) }
-    fun setDedup(text: String) = update { it.copy(dedupMinutes = text.toIntOrNull() ?: 0) }
-    fun setDelay(text: String) = update { it.copy(delaySeconds = text.toIntOrNull() ?: 0) }
+    // 数字类字段统一在这里做区间夹紧，UI 层只负责「能不能解析成整数」。
+    // 不夹紧的后果：maxLen=0 会让 splitText 走「不切」分支，去重窗口为负
+    // 会让时间比较恒真从而永久去重——都是很难从界面上看出原因的坏状态。
+    fun setMaxLen(v: Int) = update { it.copy(maxLen = v.coerceIn(1, 5000)) }
+    fun setDedup(v: Int) = update { it.copy(dedupMinutes = v.coerceIn(0, 1440)) }
+    fun setDelay(v: Int) = update { it.copy(delaySeconds = v.coerceIn(0, 600)) }
     fun setSenderMode(mode: SenderMode) = update { it.copy(senderMode = mode) }
     fun setKeywordMode(mode: KeywordMode) = update { it.copy(keywordMode = mode) }
     fun setCaseSensitive(v: Boolean) = update { it.copy(caseSensitive = v) }

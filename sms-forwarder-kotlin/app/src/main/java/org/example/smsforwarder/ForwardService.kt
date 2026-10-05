@@ -297,7 +297,7 @@ class ForwardService : Service() {
         }
 
         for (m in items) {
-            // 广播通道先看��，兜底通道就不会重复转发同一条
+            // 广播通道先看到就把水位推上去，兜底通道随后扫库时就不会重复转发同一条
             if (m.rawDate > lastSeenDate) lastSeenDate = m.rawDate
             runCatching { processOne(m, cfg) }
                 .onFailure { log("error", "处理短信异常: ${it.message}", m.from) }
